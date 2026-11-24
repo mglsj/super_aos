@@ -2,22 +2,35 @@
 import { BASE } from '../lib/base';
 import Base from '@/layouts/Base.astro';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/starwind/breadcrumb';
-import Question from '@/components/learn/Question.svelte';
-import { units } from '@/lib/course';
-import { bank } from '@/lib/bank';
+import PyqQuestion from '@/components/learn/PyqQuestion.svelte';
+import PyqTracker from '@/components/learn/PyqTracker.svelte';
+import PyqControls from '@/components/learn/PyqControls.svelte';
+import PyqLinkList from '@/components/learn/PyqLinkList.svelte';
+import PyqRings from '@/components/learn/PyqRings.svelte';
+import { highYield, pyqGroups, pyqItems } from '@/lib/pyq';
 
-const past = bank.filter((x) => x.q.pastPaper);
-const groups = units
-  .map((unit) => ({
-    unit,
-    lessons: unit.lessons.map((lesson) => ({ lesson, items: past.filter((x) => x.lessonId === lesson.id) })).filter((g) => g.items.length > 0),
-  }))
-  .filter((g) => g.lessons.length > 0);
+const counted = (x: (typeof pyqItems)[number]) => ({ id: x.id, predicted: x.kind === 'predicted' });
+const tracked = pyqGroups.map((g) => ({ id: g.unit.id, title: g.unit.title, items: g.items.map(counted) }));
+const link = (x: (typeof pyqItems)[number]) => ({
+  id: x.id,
+  number: x.number,
+  unitId: x.unitId,
+  predicted: x.kind === 'predicted',
+  excerpt: x.excerpt,
+  times: x.times,
+  sources: x.sources,
+});
+const pastCount = pyqItems.filter((x) => x.kind === 'pyq').length;
+const predictedCount = pyqItems.length - pastCount;
+const paperCount = new Set(pyqItems.flatMap((x) => x.sources)).size;
+const unitLabel = (id: number | string) => (typeof id === 'number' ? `Unit ${id}` : 'Other');
+// The card does not need these, and leaving them out keeps the page smaller.
+const card = ({ excerpt, unitId, lessonId, ...rest }: (typeof pyqItems)[number]) => rest;
 ---
 
 <Base title="Past quiz questions" description="Questions from past Advanced Operating Systems quizzes, grouped by topic, each with a model answer and marking points.">
   <div class="mx-auto grid max-w-6xl gap-10 px-4 lg:grid-cols-[minmax(0,1fr)_15rem]">
-    <main class="min-w-0 pt-8">
+    <main class="min-w-0 pt-8 pb-40">
       <Breadcrumb>
         <BreadcrumbList>
           <BreadcrumbItem><BreadcrumbLink href={`${BASE}/`}>Course map</BreadcrumbLink></BreadcrumbItem>
@@ -28,29 +41,43 @@ const groups = units
 
       <h1 class="mt-4 text-3xl leading-tight font-semibold tracking-tight">Past quiz questions</h1>
       <p class="text-muted-foreground mt-2 max-w-2xl text-lg">
-        {past.length} questions that have been asked in quizzes, mid-sems and end-sems for this course, grouped by topic. They show the style to
-        expect: explain why, justify, compare, true or false with a correction, and short numerical problems.
+        {pastCount} questions that have been asked in quizzes, mid-sems and end-sems of this course and its predecessor (OSN), from {paperCount}
+        papers between 2020 and 2026, grouped by topic. They show the style to expect: explain why, justify, compare, true or false with a
+        correction, and short numerical problems. {predictedCount} predicted questions, written in the same style, are hidden until you turn on
+        <b>Predicted</b>.
       </p>
       <p class="text-muted-foreground mt-3 max-w-2xl text-sm">
-        Each question is tagged with the paper it came from where that is known. The model answers and marking points were written for this
-        site; where a paper came with its own answer key, they follow it. Write your own answer first, then compare.
+        Each question is tagged with every paper it came from. A question asked more than once, word for word or reworded, carries a
+        <b>high-yield ×N</b> badge and comes first in its topic; questions outside the end-sem syllabus are marked and come last. Answers
+        that came with a paper follow the professor's key, and each added answer says where it came from. Predicted questions count
+        towards your progress only while they are shown. Answers stay hidden until you press <b>Show answer</b>. The button on
+        each question marks it <b>completed</b>, a second click flags it to <b>revisit</b>, and a third resets it. Keyboard: <kbd>J</kbd>/<kbd>K</kbd>
+        next and previous question, <kbd>Space</kbd> show or hide the answer, <kbd>C</kbd> change its status. Progress is saved in this browser.
       </p>
 
+      <PyqRings client:load units={tracked} />
+      <PyqLinkList client:load mode="revisit" items={pyqItems.map(link)} />
+      <PyqLinkList client:load mode="highYield" items={highYield.map(link)} />
+
+      <PyqControls client:load items={pyqItems.map(counted)} />
+
       {
-        groups.map((g) => (
-          <section class="mt-12" id={`unit-${g.unit.id}`}>
-            <p class="text-muted-foreground text-xs font-medium tracking-wider uppercase">Unit {g.unit.id}</p>
+        pyqGroups.map((g) => (
+          <section class="pyq-group mt-12 scroll-mt-44 sm:scroll-mt-32" id={`unit-${g.unit.id}`}>
+            <p class="text-muted-foreground text-xs font-medium tracking-wider uppercase">{unitLabel(g.unit.id)}</p>
             <h2 class="text-2xl font-semibold tracking-tight">{g.unit.title}</h2>
             {g.lessons.map(({ lesson, items }) => (
-              <div class="mt-6">
+              <div class="pyq-group mt-6">
                 <h3 class="flex flex-wrap items-baseline gap-x-3 text-lg font-medium">
                   {lesson.title}
-                  <a class="text-primary-accent text-sm font-normal underline underline-offset-2" href={`${BASE}/learn/${lesson.id}`}>
-                    Open the lesson
-                  </a>
+                  {lesson.id !== 'other' && (
+                    <a class="text-primary-accent text-sm font-normal underline underline-offset-2" href={`${BASE}/learn/${lesson.id}`}>
+                      Open the lesson
+                    </a>
+                  )}
                 </h3>
                 {items.map((item) => (
-                  <Question client:visible q={item.q} label="Past quiz" />
+                  <PyqQuestion client:load item={card(item)} />
                 ))}
               </div>
             ))}
@@ -64,11 +91,11 @@ const groups = units
         <p class="text-muted-foreground text-xs font-medium tracking-wider uppercase">Jump to</p>
         <ol class="mt-3 grid border-l">
           {
-            groups.map((g) => (
+            pyqGroups.map((g) => (
               <li>
                 <a class="text-muted-foreground hover:text-foreground -ml-px block border-l border-transparent py-1 pl-3" href={`#unit-${g.unit.id}`}>
-                  Unit {g.unit.id}: {g.unit.title}
-                  <span class="text-xs"> ({g.lessons.reduce((n, l) => n + l.items.length, 0)})</span>
+                  {unitLabel(g.unit.id)}: {g.unit.title}
+                  <span class="text-xs"> ({g.items.filter((x) => x.kind === 'pyq').length})</span>
                 </a>
               </li>
             ))
@@ -77,4 +104,26 @@ const groups = units
       </nav>
     </aside>
   </div>
+  <PyqTracker client:load units={tracked} />
 </Base>
+
+<style is:global>
+  /* Hide a unit or topic heading once filters have hidden every question under it. */
+  .pyq-group:not(:has(.pyq-card:not([hidden]))) {
+    display: none;
+  }
+  .pyq-card[data-active] .q {
+    outline: 2px solid var(--outline);
+    outline-offset: 3px;
+  }
+  .pyq-card[hidden] {
+    display: none !important;
+  }
+  kbd {
+    font-family: ui-monospace, monospace;
+    font-size: 0.85em;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 4px;
+  }
+</style>

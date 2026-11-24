@@ -130,12 +130,24 @@
 }
 
 @layer base {
+  /* 18px base instead of 16px: every rem-based size (text, spacing) scales up for easier reading. */
+  html {
+    font-size: 112.5%;
+  }
   * {
     @apply border-border outline-outline/50;
   }
   body {
     @apply bg-background text-foreground scheme-light dark:scheme-dark font-sans;
-    /* the whiteboard's dot grid */
+  }
+  /* The whiteboard's dot grid, pinned to the viewport so only the content scrolls over it.
+     A fixed layer rather than background-attachment: fixed, which iOS Safari ignores. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
     background-image: radial-gradient(circle, var(--dot) 1.1px, transparent 1.3px);
     background-size: 22px 22px;
   }
